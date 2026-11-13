@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Cricket Match Fees</title>
+<meta name="description" content="Split cricket match fees between players, handle free players, track who paid and post the list to WhatsApp. Free, no sign-up.">
+<meta name="theme-color" content="#1b1d3f">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src https://cricket-fees-api.pages.dev; img-src 'self' data: blob:; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Inter:wght@400;500;600&display=swap">
+<style>
+/* Layout: one phone-first column — team header, summary strip, group message, then matches / players */
+:root{
+  --bg:#f5f6fa; --surface:#ffffff; --sunk:#eceef5; --line:#dde0ea;
+  --ink:#151a2d; --muted:#5d6480; --accent:#c23a68; --accent-ink:#ffffff; --accent-soft:#fbe7ee;
+  --good:#18794e; --good-soft:#e2f4ea; --warn:#a15c07; --warn-soft:#fdf0dc; --bad:#b42318; --free:#5b4bc4; --free-soft:#ebe8fb;
+  --display:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
+  --body:"Inter",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:ui-monospace,"SF Mono",Menlo,monospace;
+  --hero:#1b1d3f; --hero-ink:#ffffff; --hero-muted:#b9bce0;
+  --chat:#efeae2; --bubble:#d9fdd3; --bubble-ink:#111b21;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){:root{
+  --bg:#10131f; --surface:#181c2c; --sunk:#202539; --line:#2c3250;
+  --ink:#e9ebf5; --muted:#a0a6c2; --accent:#f06b97; --accent-ink:#1a0c13; --accent-soft:#3a1d2a;
+  --good:#5fd39a; --good-soft:#163428; --warn:#f2b45c; --warn-soft:#3a2a12; --bad:#ff8a80; --free:#a99cff; --free-soft:#28244a;
+  --hero:#1a1c3a; --hero-ink:#ffffff; --hero-muted:#a9acd6; --chat:#0b141a; --bubble:#005c4b; --bubble-ink:#e9edef; color-scheme:dark}}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.45;padding-bottom:env(safe-area-inset-bottom,0px)}
+[hidden]{display:none!important}
+.wrap{max-width:860px;margin:0 auto;padding-block:18px 60px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:grid;gap:16px}
+h1,h2,h3{font-family:var(--display);font-weight:700;letter-spacing:.01em;margin:0;text-wrap:balance}
+h1{font-size:2rem;line-height:1}
+h2{font-size:1.45rem}
+h3{font-size:1.2rem}
+p{margin:0}
+a{color:var(--accent)}
+.num{font-variant-numeric:tabular-nums}
+.muted{color:var(--muted)}
+.small{font-size:.85rem}
+.eyebrow{font-size:.72rem;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:600}
+header{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px}
+.team{display:flex;align-items:center;gap:12px;min-width:0}
+.badge{width:46px;height:46px;border-radius:50%;background:var(--accent);color:var(--accent-ink);display:grid;place-items:center;font-family:var(--display);font-size:1.25rem;font-weight:700;flex:none}
+.actions{display:flex;flex-wrap:wrap;gap:8px}
+button,.btn{font:inherit;font-weight:600;font-size:.9rem;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--ink);padding:8px 13px;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:40px}
+button:hover,.btn:hover{border-color:var(--muted)}
+button:focus-visible,.btn:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.primary{background:var(--accent)!important;border-color:var(--accent)!important;color:var(--accent-ink)!important}
+.ghost{background:transparent;border-color:transparent;color:var(--muted);padding:6px 8px;min-height:34px}
+.ghost:hover{color:var(--ink)}
+.danger{color:var(--bad)}
+button:disabled{opacity:.5;cursor:not-allowed}
+.strip{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.strip>div{background:var(--surface);padding:12px 14px;min-width:0}
+.big{font-family:var(--display);font-size:1.9rem;font-weight:700;line-height:1.1}
+.big.due{color:var(--accent)}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px;display:grid;gap:12px;min-width:0}
+.note{padding:10px 12px;border-radius:8px;background:var(--warn-soft);color:var(--warn);font-size:.9rem}
+.note.info{background:var(--sunk);color:var(--muted)}
+.note.good{background:var(--good-soft);color:var(--good)}
+.include,.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{white-space:nowrap;display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:999px;padding:6px 12px;font-size:.88rem;cursor:pointer;background:var(--surface);user-select:none;min-height:36px;color:var(--ink);font-weight:500}
+.chip input{margin:0;accent-color:var(--accent)}
+.chip.on{border-color:var(--accent);background:var(--accent-soft)}
+.chip.free{border-color:var(--free);background:var(--free-soft);color:var(--free)}
+.chip.cover{border-color:var(--good);background:var(--good-soft);color:var(--good)}
+textarea,input,select{font:inherit;font-size:16px;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:9px 10px;width:100%;min-width:0}
+textarea{resize:vertical}
+textarea.msg{font-family:var(--mono);font-size:.82rem;line-height:1.5;min-height:230px;background:var(--sunk)}
+label.f{display:grid;gap:4px;font-size:.85rem;font-weight:600;color:var(--muted)}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.row.end{justify-content:flex-end}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px}
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line)}
+.tabs button{border:none;border-bottom:3px solid transparent;border-radius:0;background:none;color:var(--muted);padding:8px 12px;font-family:var(--display);font-size:1.15rem;letter-spacing:.02em}
+.tabs button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--accent)}
+.list{display:grid;gap:12px}
+.item-head{display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px;align-items:flex-start}
+.item-head>div{min-width:0}
+.tag{display:inline-block;font-size:.7rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;padding:2px 8px;border-radius:999px;background:var(--sunk);color:var(--muted);vertical-align:middle}
+.tag.done{background:var(--good-soft);color:var(--good)}
+.tag.open{background:var(--accent-soft);color:var(--accent)}
+.bar{height:6px;border-radius:99px;background:var(--sunk);overflow:hidden}
+.bar>i{display:block;height:100%;background:var(--good);border-radius:99px}
+.players{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:6px}
+.pl{display:flex;align-items:center;justify-content:space-between;gap:8px;border:1px solid var(--line);border-radius:8px;padding:6px 6px 6px 10px;min-width:0;background:var(--surface)}
+.pl .n{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.pl.paid{background:var(--good-soft);border-color:transparent}
+.pl.isfree{background:var(--free-soft);border-color:transparent;color:var(--free)}
+.toggle{min-height:32px;padding:4px 10px;font-size:.8rem;border-radius:6px;flex:none}
+.toggle.paid{background:var(--good);border-color:var(--good);color:var(--surface)}
+.prow{display:grid;gap:8px;border-bottom:1px solid var(--line);padding-block:10px}
+.prow:last-child{border-bottom:none}
+.prow .top{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+.amt{font-family:var(--display);font-size:1.35rem;font-weight:700}
+.amt.zero{color:var(--good)}
+details>summary{cursor:pointer;color:var(--muted);font-weight:600;padding-block:6px}
+.overlay{position:fixed;inset:0;background:rgb(10 12 20 / .55);display:grid;place-items:start center;overflow-y:auto;z-index:20;padding:max(16px,env(safe-area-inset-top,0px)) max(10px,env(safe-area-inset-right,0px)) 24px max(10px,env(safe-area-inset-left,0px))}
+.sheet{background:var(--surface);border-radius:14px;width:min(640px,100%);padding:18px;display:grid;gap:14px;border:1px solid var(--line)}
+.step{display:grid;gap:8px;padding-top:12px;border-top:1px solid var(--line)}
+.step>.lbl{font-weight:700;font-size:.95rem}
+.preview{background:var(--sunk);border-radius:8px;padding:10px 12px;font-size:.9rem;display:grid;gap:6px}
+.ptable{width:100%;border-collapse:collapse;font-size:.88rem}
+.ptable td{padding:4px 0;border-bottom:1px solid var(--line)}
+.ptable td:last-child{text-align:right;font-variant-numeric:tabular-nums;font-weight:600}
+.ptable tr.free td{color:var(--free)}
+.confirm{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:8px 10px;border-radius:8px;background:var(--accent-soft)}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:999px;font-weight:600;font-size:.9rem;z-index:30;max-width:calc(100% - 32px);text-align:center}
+.nudge{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;padding:12px 14px;border-radius:12px;border:1px solid var(--line);background:var(--surface)}
+.nudge.warn{border-color:var(--warn);background:var(--warn-soft)}
+.nudge.good{border-color:var(--good);background:var(--good-soft)}
+.nudge p{min-width:0;flex:1 1 220px}
+.empty{text-align:center;padding:24px 12px;color:var(--muted);display:grid;gap:10px;justify-items:center}
+ul.plain{margin:0;padding-left:18px}
+footer{color:var(--muted);font-size:.82rem;display:grid;gap:4px}
+/* hero band */
+.hero{background:var(--hero);color:var(--hero-ink);padding-top:env(safe-area-inset-top,0px)}
+.hero-in{max-width:860px;margin:0 auto;padding-block:18px 20px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:grid;gap:16px}
+.hero .eyebrow{color:var(--hero-muted)}
+.hero h1{color:var(--hero-ink)}
+.hero .badge{box-shadow:0 0 0 3px rgb(255 255 255 / .15)}
+.hero .btn-h{background:rgb(255 255 255 / .1);border-color:rgb(255 255 255 / .18);color:var(--hero-ink)}
+.hero .btn-h:hover{border-color:rgb(255 255 255 / .5)}
+.totals{display:grid;grid-template-columns:1.4fr 1fr 1fr;gap:10px;align-items:end}
+.totals>div{min-width:0}
+.totals .big{color:var(--hero-ink);font-size:2.4rem}
+.totals .big.due{color:#ff8fb4}
+.totals .mid{font-family:var(--display);font-size:1.6rem;font-weight:700;line-height:1.1}
+/* WhatsApp-style preview */
+.chat{background:var(--chat);border-radius:12px;padding:12px;max-height:360px;overflow:hidden;position:relative}
+.chat.open{max-height:none}
+.chat:not(.open)::after{content:"";position:absolute;inset:auto 0 0;height:70px;background:linear-gradient(transparent,var(--chat))}
+.bubble{background:var(--bubble);color:var(--bubble-ink);border-radius:10px 10px 10px 2px;padding:9px 11px;font-size:.88rem;line-height:1.45;white-space:pre-wrap;word-break:break-word;box-shadow:0 1px 1px rgb(0 0 0 / .12);max-width:100%}
+.chat-more{justify-self:center}
+/* player rows: tap the row to mark paid */
+.plist{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:6px}
+.prow2{display:grid;grid-template-columns:1fr auto auto;align-items:center;gap:10px;width:100%;text-align:left;border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--surface);color:var(--ink);font-weight:500;min-height:46px;cursor:pointer}
+.prow2 .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.prow2 .am{font-variant-numeric:tabular-nums;font-weight:600}
+.prow2 .st{font-size:.72rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:3px 8px;border-radius:999px;background:var(--accent-soft);color:var(--accent)}
+.prow2.paid{background:var(--good-soft);border-color:transparent}
+.prow2.paid .st{background:var(--good);color:var(--surface)}
+.prow2.isfree{background:var(--free-soft);border-color:transparent;color:var(--free);cursor:default}
+.prow2.isfree .st{background:transparent;color:var(--free)}
+/* bottom action bar on phones */
+.bbar{display:none}
+@media (max-width:700px){
+  .bbar{display:grid;grid-template-columns:1fr 1fr 1.25fr;gap:8px;position:fixed;left:0;right:0;bottom:0;z-index:15;background:var(--surface);border-top:1px solid var(--line);padding:10px max(12px,env(safe-area-inset-right,0px)) calc(10px + env(safe-area-inset-bottom,0px)) max(12px,env(safe-area-inset-left,0px));box-shadow:0 -6px 20px rgb(0 0 0 / .08)}
+  .bbar button,.bbar a{min-height:48px;font-size:.92rem;padding:6px 8px}
+  .wrap{padding-bottom:110px}
+  .desk{display:none!important}
+  .toast{bottom:calc(84px + env(safe-area-inset-bottom,0px))}
+  .totals .big{font-size:2rem}
+  .totals .mid{font-size:1.35rem}
+}
+@media (max-width:520px){.big{font-size:1.5rem} h1{font-size:1.75rem}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<section class="hero">
+  <div class="hero-in">
+    <header>
+      <div class="team">
+        <div class="badge" id="badge" aria-hidden="true">XI</div>
+        <div style="min-width:0">
+          <div class="eyebrow">Match fees</div>
+          <h1 id="teamName">Your team</h1>
+        </div>
+      </div>
+      <div class="actions">
+        <button class="primary desk" id="btnAddMatch" type="button">+ Add match</button>
+        <button class="btn-h" id="btnMore" type="button" aria-haspopup="true">More ▾</button>
+      </div>
+    </header>
+    <div class="totals" aria-label="Summary">
+      <div><div class="eyebrow">Still to collect</div><div class="big due num" id="sDue">₹0</div></div>
+      <div><div class="eyebrow">Players owing</div><div class="mid num" id="sPlayers">0</div></div>
+      <div><div class="eyebrow">Open matches</div><div class="mid num" id="sOpen">0</div></div>
+    </div>
+  </div>
+</section>
+<div class="wrap">
+  <div id="banner" hidden></div>
+  <section id="nudges" class="list" aria-label="To do" hidden></section>
+
+  <section class="card" aria-labelledby="msgTitle">
+    <div>
+      <h2 id="msgTitle">Message for the group</h2>
+      <p class="muted small"><b>Add match</b> → <b>Send</b> → players tick ✅ in the group → copy the group's latest list and tap <b>Update</b> → add the next match and send again.</p>
+    </div>
+    <div class="include" id="include"></div>
+    <div class="chat" id="chat"><div class="bubble" id="bubble"></div></div>
+    <button type="button" class="ghost chat-more" id="chatMore">Show full message</button>
+    <textarea id="msg" readonly hidden aria-label="WhatsApp message"></textarea>
+    <div class="row">
+      <a class="btn primary desk" id="btnWa" href="https://wa.me/" target="_blank" rel="noopener">Send to WhatsApp</a>
+      <button id="btnCopy" type="button">Copy message</button>
+      <button class="desk" id="btnTicks" type="button">Update from WhatsApp</button>
+    </div>
+  </section>
+
+  <section class="card" aria-label="Fees">
+    <div class="tabs" role="tablist">
+      <button role="tab" id="tabMatches" aria-selected="true" type="button">By match</button>
+      <button role="tab" id="tabPlayers" aria-selected="false" type="button">By player</button>
+    </div>
+    <div id="view"></div>
+    <div class="row" style="border-top:1px solid var(--line);padding-top:12px">
+      <button type="button" data-act="add-match">+ Add match</button>
+      <button type="button" data-act="import">Update from WhatsApp</button>
+      <button type="button" class="ghost" data-act="add-dues">+ Type dues by hand</button>
+    </div>
+  </section>
+
+  <footer>
+    <p>Everything is saved on this phone only. Use <b>More → Send to co-captain</b> to copy it to another phone.</p>
+    <p><a href="guide.pdf" target="_blank" rel="noopener">How to use (PDF guide)</a> · Free and open source · <a href="https://github.com/Pravesh-20/cricket-match-fees" target="_blank" rel="noopener noreferrer">GitHub</a></p>
+  </footer>
+</div>
+
+<nav class="bbar" aria-label="Main actions">
+  <button type="button" data-act="add-match">+ Match</button>
+  <button type="button" data-act="import">Update</button>
+  <a class="btn primary" id="bbSend" href="https://wa.me/" target="_blank" rel="noopener">Send to group</a>
+</nav>
+<div id="overlay" class="overlay" hidden></div>
+<div id="toast" class="toast" hidden></div>
+
+<script src="app.js?v=5"></script>
+</body>
+</html>
