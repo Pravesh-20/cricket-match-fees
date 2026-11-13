@@ -196,7 +196,7 @@
     $("tabPlayers").setAttribute("aria-selected", tab === "players");
     const v = $("view");
     if (!items.length) {
-      v.innerHTML = `<div class="empty"><h3>No matches yet</h3><p>Paste your CricHeroes link and the fee. The app splits it and writes the WhatsApp message.</p><button class="primary" type="button" data-act="add-match">+ Add your first match</button><button type="button" data-act="import">Already have a fees list in WhatsApp? Paste it</button></div>`;
+      v.innerHTML = `<div class="empty"><svg viewBox="0 0 84 84" aria-hidden="true"><rect x="0" y="74" width="84" height="6" rx="3" fill="var(--accent-soft)"/><rect x="22" y="22" width="7" height="54" rx="3" fill="var(--accent)"/><rect x="38.5" y="22" width="7" height="54" rx="3" fill="var(--accent)"/><rect x="55" y="22" width="7" height="54" rx="3" fill="var(--accent)"/><rect x="20" y="16" width="22" height="5" rx="2.5" fill="var(--gold)"/><rect x="42" y="16" width="22" height="5" rx="2.5" fill="var(--gold)"/><circle cx="70" cy="62" r="7" fill="var(--ball)"/><path d="M65.5 57.5c3 3 3 6 0 9M74.5 57.5c-3 3-3 6 0 9" stroke="#fff" stroke-width="1" fill="none" stroke-dasharray="1.5 1.5"/></svg><h3>No matches yet</h3><p>Paste your CricHeroes link and the fee. The app splits it and writes the WhatsApp message.</p><button class="primary" type="button" data-act="add-match">+ Add your first match</button><button type="button" data-act="import">Already have a fees list in WhatsApp? Paste it</button></div>`;
       return;
     }
     v.innerHTML = tab === "matches" ? renderMatches(items, labels) : renderPlayers(items, labels);
@@ -248,32 +248,40 @@
     const all = it.players || [];
     const freeN = all.filter((p) => p.free).length;
     const playedN = all.filter((p) => !p.contrib).length;
-    const amts = [...new Set(all.filter((p) => !p.free).map((p) => p.amount))];
-    const sub = it.kind === "dues"
-      ? `${fmtDate(it.date) || "Earlier"} · ${t.n} players`
-      : `${fmtDate(it.date)}${it.ground ? " · " + esc(it.ground) : ""} · ${inr(it.fee)} ÷ ${playedN}${freeN ? ` · ${freeN} free` : ""} · ${amts.length === 1 ? inr(amts[0]) + " each" : amts.map(inr).join(" / ")}`;
-    const extra = it.kind !== "dues" && t.total > it.fee ? ` <span class="muted">(${inr(t.total - it.fee)} extra from rounding)</span>` : "";
+    const d = it.date ? new Date(it.date + "T00:00:00") : null;
+    const okDate = d && !isNaN(d);
+    const stub = it.kind === "dues"
+      ? `<div class="stub old"><span class="d">OLD</span><span class="m">dues</span>${(it.matches || []).length ? `<span class="w">${it.matches.length} match${it.matches.length === 1 ? "" : "es"}</span>` : ""}</div>`
+      : `<div class="stub"><span class="d">${okDate ? d.getDate() : "–"}</span><span class="m">${okDate ? d.toLocaleDateString("en-IN", { month: "short" }) : ""}</span><span class="w">${okDate ? d.toLocaleDateString("en-IN", { weekday: "short" }) : ""}</span></div>`;
+    const title = it.kind === "dues"
+      ? `<div class="fx-title"><h3>Old dues</h3>${itemTitle(it) ? `<span class="vs">${esc(itemTitle(it))}</span>` : ""}</div>`
+      : `<div class="fx-title"><span class="vs">vs</span><h3>${esc(it.opponent || "TBC")}</h3></div>`;
+    const math = it.kind === "dues"
+      ? `<div class="fx-math"><span class="pill">${t.n} players</span><span class="pill">${inr(t.total)} total</span></div>`
+      : `<div class="fx-math"><span class="pill">${inr(it.fee)}</span><span>÷</span><span class="pill">${playedN} players</span><span>=</span><span class="pill share">${inr(usualShare(it))} each</span>${freeN ? `<span class="pill" style="color:var(--free)">${freeN} free</span>` : ""}${it.ground ? `<span class="muted" style="flex-basis:100%">${esc(it.ground)}</span>` : ""}</div>`;
     const players = all.map((p) => {
       if (p.free) return `<div class="prow2 isfree"><span class="nm">${esc(p.name)}</span><span class="am"></span><span class="st">Free</span></div>`;
       const paid = isPaid(it, p.key);
       return `<button type="button" class="prow2 ${paid ? "paid" : ""}" data-toggle="${esc(it.id)}" data-key="${esc(p.key)}" aria-pressed="${paid}" aria-label="${esc(p.name)} ${inr(p.amount)} ${paid ? "paid, tap to undo" : "tap to mark paid"}">
-        <span class="nm" title="${esc(p.name)}">${esc(p.name)}${p.contrib ? ' <span class="muted small">chip-in</span>' : ""}</span><span class="am">${inr(p.amount)}</span><span class="st">${paid ? "Paid ✓" : "Due"}</span></button>`;
+        <span class="nm" title="${esc(p.name)}">${esc(p.name)}${p.contrib ? '<span class="chipin">chip-in</span>' : ""}</span><span class="am">${inr(p.amount)}</span><span class="st">${paid ? "Paid" : "Due"}</span></button>`;
     }).join("");
-    return `<article class="card">
-      <div class="item-head">
-        <div>
-          <h3><span class="tag ${t.settled ? "done" : "open"}">${esc(labels[it.id])}</span> ${esc(itemTitle(it))}</h3>
-          <div class="muted small num">${sub}</div>
-          ${/^https:\/\/[^\s"<>]+$/i.test(it.link || "") ? `<a class="small" href="${esc(it.link)}" target="_blank" rel="noopener noreferrer">Scorecard ↗</a>` : ""}
+    const link = /^https:\/\/[^\s"<>]+$/i.test(it.link || "") ? `<a class="small" href="${esc(it.link)}" target="_blank" rel="noopener noreferrer">Scorecard ↗</a>` : "";
+    return `<article class="card fixture">
+      ${stub}
+      <div class="fx-body">
+        <div class="item-head">
+          <div style="display:grid;gap:6px">${title}${math}</div>
+          <div class="row"><button type="button" class="ghost" data-edit="${esc(it.id)}">Edit</button><button type="button" class="ghost danger" data-del="${esc(it.id)}">Delete</button></div>
         </div>
-        <div class="row"><button type="button" class="ghost" data-edit="${esc(it.id)}">Edit</button><button type="button" class="ghost danger" data-del="${esc(it.id)}">Delete</button></div>
+        <div id="confirm-${esc(it.id)}"></div>
+        <div class="progress">
+          <div class="top num"><span><b>${t.paidN} of ${t.n} paid</b> · ${inr(t.got)} of ${inr(t.total)}</span>${t.settled ? '<span class="stamp">All paid</span>' : `<span style="color:var(--ball);font-weight:700">${inr(t.total - t.got)} due</span>`}</div>
+          <div class="bar" aria-hidden="true"><i style="width:${pct}%"></i></div>
+        </div>
+        <div class="hint">👆 Tap a name when they pay${link ? " · " + link : ""}</div>
+        <div class="sheetlist">${players}</div>
+        ${t.settled ? "" : `<div class="row"><a class="btn" href="https://wa.me/?text=${encodeURIComponent(reminderText([it], labels))}" target="_blank" rel="noopener" data-remind="${esc(it.id)}">⏰ Send reminder</a><button type="button" class="ghost" data-allpaid="${esc(it.id)}">Mark everyone paid</button></div>`}
       </div>
-      <div id="confirm-${esc(it.id)}"></div>
-      <div class="num small"><b>${t.paidN}/${t.n} paid</b> · ${inr(t.got)} of ${inr(t.total)}${extra}</div>
-      <div class="bar" aria-hidden="true"><i style="width:${pct}%"></i></div>
-      <div class="muted small">Tap a name when they pay.</div>
-      <div class="plist">${players}</div>
-      ${t.settled ? "" : `<div class="row"><a class="btn" href="https://wa.me/?text=${encodeURIComponent(reminderText([it], labels))}" target="_blank" rel="noopener" data-remind="${esc(it.id)}">Send reminder</a><button type="button" class="ghost" data-allpaid="${esc(it.id)}">Mark everyone paid</button></div>`}
     </article>`;
   }
   function renderMatches(items, labels) {
