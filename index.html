@@ -133,7 +133,9 @@ label.f{display:grid;gap:5px;font-size:.82rem;font-weight:600;color:var(--muted)
 .stub .d{font-family:var(--display);font-weight:800;font-size:2.1rem;line-height:.9}
 .stub .m{font-size:.7rem;letter-spacing:.16em;text-transform:uppercase;font-weight:700;color:#cfe3d7}
 .stub .w{font-size:.62rem;letter-spacing:.12em;text-transform:uppercase;color:#9fc0ae;margin-top:4px}
-.stub.old{background:repeating-linear-gradient(180deg,#5a4a1a 0 14px,#66542000 14px 28px),#4d3f14}
+.stub.old{background:repeating-linear-gradient(180deg,#8a6a00 0 14px,#9a7700 14px 28px)}
+.fixture.isdues{border:2px solid var(--gold);box-shadow:0 0 0 4px color-mix(in srgb,var(--gold) 18%,transparent),var(--shadow)}
+.fixture.isdues .fx-title h3{color:var(--warn)}
 .fx-body{padding:14px 14px 16px;display:grid;gap:12px;min-width:0}
 .fx-title{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
 .fx-title .vs{font-family:var(--display);font-weight:700;color:var(--muted);font-size:1rem}
@@ -218,7 +220,7 @@ footer{color:var(--muted);font-size:.82rem;display:grid;gap:4px;justify-items:ce
 @media (max-width:640px){
   .fixture{grid-template-columns:minmax(0,1fr)}
   .stub{grid-auto-flow:column;justify-content:start;align-items:baseline;gap:8px;padding:9px 14px;border-right:0;border-bottom:2px dashed rgb(255 255 255 / .35);background:repeating-linear-gradient(90deg,var(--pitch) 0 22px,var(--pitch-2) 22px 44px)}
-  .stub.old{background:repeating-linear-gradient(90deg,#4d3f14 0 22px,#57481a 22px 44px)}
+  .stub.old{background:repeating-linear-gradient(90deg,#8a6a00 0 22px,#9a7700 22px 44px)}
   .stub::before,.stub::after{top:auto;bottom:-9px;right:auto}
   .stub::before{left:-8px}.stub::after{right:-8px;left:auto}
   .stub .d{font-size:1.5rem}
@@ -248,7 +250,7 @@ footer{color:var(--muted);font-size:.82rem;display:grid;gap:4px;justify-items:ce
       </div>
     </header>
     <div class="board" aria-label="Summary">
-      <div><span class="lbl">To collect</span><span class="val" id="sDue">₹0</span><span class="sub">across all open matches</span></div>
+      <div><span class="lbl">To collect</span><span class="val" id="sDue">₹0</span><span class="sub" id="sDueSub">across all open matches</span></div>
       <div><span class="lbl">Owing</span><span class="val sm" id="sPlayers">0</span><span class="sub">players</span></div>
       <div><span class="lbl">Open</span><span class="val sm" id="sOpen">0</span><span class="sub">matches</span></div>
     </div>
@@ -306,6 +308,6 @@ footer{color:var(--muted);font-size:.82rem;display:grid;gap:4px;justify-items:ce
 <div id="overlay" class="overlay" hidden></div>
 <div id="toast" class="toast" hidden></div>
 
-<script src="app.js?v=6"></script>
+<script src="app.js?v=7"></script>
 </body>
 </html>

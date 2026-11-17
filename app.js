@@ -71,7 +71,8 @@
     for (const p of payers) { total += p.amount; if (isPaid(it, p.key)) { got += p.amount; paidN++; } }
     return { total, got, paidN, n: payers.length, settled: payers.length > 0 && paidN === payers.length };
   };
-  const byDateAsc = (a, b) => (a.date || "").localeCompare(b.date || "") || (a.createdAt || 0) - (b.createdAt || 0);
+  // old dues always come first, then matches by date
+  const byDateAsc = (a, b) => (a.kind === "dues" ? 0 : 1) - (b.kind === "dues" ? 0 : 1) || (a.date || "").localeCompare(b.date || "") || (a.createdAt || 0) - (b.createdAt || 0);
   function labelMap(list) {
     setShortLabels(live());
     const m = {}; for (const it of list) m[it.id] = it.kind === "dues" ? "Old dues" : (SHORT[it.id] || dayMon(it.date) || "Match");
@@ -133,35 +134,45 @@
     const labels = labelMap(list);
     setShortLabels(list);
     const L = [`🏏 *${S.team || "Team"} · Match Fees*`, ""];
-    for (const it of list) {
-      const t = itemTotals(it);
-      if (it.kind === "dues") {
-        const ms = it.matches || [];
-        L.push(`📒 *Old dues* · ${inr(t.total - t.got)} from ${t.n - t.paidN} player${t.n - t.paidN === 1 ? "" : "s"}${ms.length ? ` (${ms.length} earlier match${ms.length === 1 ? "" : "es"})` : ""}`);
-      } else {
+    const RULE = "━━━━━━━━━━━━━━";
+    const dues = list.filter((it) => it.kind === "dues"), matches = list.filter((it) => it.kind !== "dues");
+    const duesLeft = dues.reduce((s, it) => { const t = itemTotals(it); return s + t.total - t.got; }, 0);
+    if (dues.length) {
+      const owe = new Set(); for (const it of dues) for (const p of it.players || []) if (!p.free && !isPaid(it, p.key)) owe.add(p.key);
+      const nm = dues.reduce((s, it) => s + (it.matches || []).length, 0);
+      L.push(`📒 *OLD DUES* · ${inr(duesLeft)} pending from ${owe.size} player${owe.size === 1 ? "" : "s"}${nm ? ` (${nm} earlier match${nm === 1 ? "" : "es"})` : ""}`);
+      L.push(RULE);
+    }
+    if (matches.length) {
+      L.push("🏟️ *MATCH FEES*");
+      for (const it of matches) {
         const all = it.players || [];
         const playedN = all.filter((p) => !p.contrib).length;
         const free = all.filter((p) => p.free), payers = all.filter((p) => !p.free);
-        L.push(`🏟️ *${forWhat(it)}* vs ${it.opponent || "TBC"} · ${inr(it.fee)} ÷ ${playedN} = *${inr(usualShare(it))}*`);
+        L.push(`• *${forWhat(it)}* vs ${it.opponent || "TBC"} · ${inr(it.fee)} ÷ ${playedN} = *${inr(usualShare(it))}*`);
         if (free.length) {
           const cover = payers.filter((p) => p.cover);
           L.push(`   Free: ${listNames(free.map((p) => p.name))} · covered by ${cover.length === payers.length ? "everyone" : cover.length + " players"}`);
         }
       }
-      L.push("");
+      L.push(RULE);
     }
     const ps = playersAcross(list);
-    L.push("*Pay and tick ✅ next to your name* 👇");
-    ps.forEach((p, i) => {
-      const nm = `${i + 1}. ${p.name}`;
-      if (!p.due) { L.push(`${nm} – ${inr(p.paid)} ✅`); return; }
-      const what = breakdown(p.dueItems);
-      const paidBit = p.paidItems.length ? ` · paid ${p.paidItems.map((d) => forWhat(d.it)).join(", ")}` : "";
-      L.push(`${nm} – ${inr(p.due)} (${what})${paidBit}`);
-    });
-    const due = ps.reduce((s, p) => s + p.due, 0), owing = ps.filter((p) => p.due).length;
+    const owing = ps.filter((p) => p.due), clear = ps.filter((p) => !p.due && p.paid);
+    if (owing.length) {
+      L.push("*Pay and tick ✅ next to your name* 👇");
+      owing.forEach((p, i) => {
+        const paidBit = p.paidItems.length ? ` · paid ${p.paidItems.map((d) => forWhat(d.it)).join(", ")}` : "";
+        L.push(`${i + 1}. ${p.name} – ${inr(p.due)} (${breakdown(p.dueItems)})${paidBit}`);
+      });
+    }
+    if (clear.length) L.push("", `✅ *All paid:* ${clear.map((p) => p.name).join(", ")}`);
+    const due = owing.reduce((s, p) => s + p.due, 0);
     L.push("");
-    L.push(due ? `Pending: *${inr(due)}* from ${owing} player${owing === 1 ? "" : "s"}` : "All paid. Thank you! 🙌");
+    if (due) {
+      if (dues.length && matches.length) { L.push(`📒 Old dues: ${inr(duesLeft)}`); L.push(`🏟️ Match fees: ${inr(due - duesLeft)}`); }
+      L.push(`💰 *Total pending: ${inr(due)}* from ${owing.length} player${owing.length === 1 ? "" : "s"}`);
+    } else L.push("All paid. Thank you! 🙌");
     if (S.payNote && S.payNote.trim()) L.push(`Pay to: ${S.payNote.trim()}`);
     return L.join("\n");
   }
@@ -173,7 +184,10 @@
     document.title = (S.team ? S.team + " · " : "") + "Match Fees";
     const items = live();
     const ps = playersAcross(items);
-    $("sDue").textContent = inr(ps.reduce((s, p) => s + p.due, 0));
+    const totalDue = ps.reduce((s, p) => s + p.due, 0);
+    $("sDue").textContent = inr(totalDue);
+    const oldDue = items.filter((it) => it.kind === "dues").reduce((s, it) => { const t = itemTotals(it); return s + t.total - t.got; }, 0);
+    $("sDueSub").textContent = oldDue ? `${inr(oldDue)} old dues · ${inr(totalDue - oldDue)} match fees` : "across all open matches";
     $("sPlayers").textContent = ps.filter((p) => p.due).length;
     $("sOpen").textContent = items.filter((it) => !itemTotals(it).settled).length;
 
@@ -266,7 +280,7 @@
         <span class="nm" title="${esc(p.name)}">${esc(p.name)}${p.contrib ? '<span class="chipin">chip-in</span>' : ""}</span><span class="am">${inr(p.amount)}</span><span class="st">${paid ? "Paid" : "Due"}</span></button>`;
     }).join("");
     const link = /^https:\/\/[^\s"<>]+$/i.test(it.link || "") ? `<a class="small" href="${esc(it.link)}" target="_blank" rel="noopener noreferrer">Scorecard ↗</a>` : "";
-    return `<article class="card fixture">
+    return `<article class="card fixture${it.kind === "dues" ? " isdues" : ""}">
       ${stub}
       <div class="fx-body">
         <div class="item-head">
@@ -285,7 +299,7 @@
     </article>`;
   }
   function renderMatches(items, labels) {
-    const sorted = [...items].sort(byDateAsc).reverse();
+    const sorted = [...items].sort((a, b) => (a.kind === "dues" ? 0 : 1) - (b.kind === "dues" ? 0 : 1) || -byDateAsc(a, b));
     const open = sorted.filter((it) => !itemTotals(it).settled), done = sorted.filter((it) => itemTotals(it).settled);
     let html = `<div class="list">${open.map((it) => renderItem(it, labels)).join("") || `<div class="empty">Everyone has paid for every match. 🎉</div>`}</div>`;
     if (done.length) html += `<details><summary>Fully paid (${done.length})</summary><div class="list">
@@ -536,7 +550,7 @@
     const matches = [], players = [], skipped = [];
     for (const raw of String(text || "").split("\n")) {
       const line = raw.replace(/[\u200B-\u200F\u2060-\u2064\uFEFF\u00A0]/g, " ").replace(/^\s*\[[^\]]*\]\s*[^:]{1,40}:\s*/, "").trim(); if (!line || /^[━─=_\-–—]{3,}$/.test(line)) continue;
-      if (/^(→|free:|₹|📒|\d+ of \d+ players|all paid|all fees)/i.test(line)) { skipped.push(line); continue; }
+      if (/^(→|free:|₹|📒|🏟|💰|✅\s*\*?all paid|•|total pending|match fees|old dues|\d+ of \d+ players|all paid|all fees)/i.test(line)) { skipped.push(line); continue; }
       const mm = line.match(/\bvs\.?\s+\*?([^*—–\-]+?)\*?\s*[—–-]\s*(.*)$/i);
       if (mm && !/^\d+\.\s/.test(line) && /🏟|vs/i.test(line) && !/–\s*₹?\d/.test(line.split(/vs/i)[0])) {
         const fee = (mm[2].match(/₹\s?([\d,]+)/) || [])[1];
