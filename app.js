@@ -133,7 +133,9 @@
     if (!list.length) return "Add a match first, or tick one above.";
     const labels = labelMap(list);
     setShortLabels(list);
-    const L = [`🏏 *${S.team || "Team"} · Match Fees*`, ""];
+    const L = [`🏏 *${S.team || "Team"} · Match Fees*`];
+    if (S.payNote && S.payNote.trim()) L.push(`💳 *Pay to: ${S.payNote.trim()}*`);
+    L.push("");
     const RULE = "━━━━━━━━━━━━━━";
     const dues = list.filter((it) => it.kind === "dues"), matches = list.filter((it) => it.kind !== "dues");
     const duesLeft = dues.reduce((s, it) => { const t = itemTotals(it); return s + t.total - t.got; }, 0);
@@ -158,22 +160,14 @@
       L.push(RULE);
     }
     const ps = playersAcross(list);
-    const owing = ps.filter((p) => p.due), clear = ps.filter((p) => !p.due && p.paid);
-    if (owing.length) {
-      L.push("*Pay and tick ✅ next to your name* 👇");
-      owing.forEach((p, i) => {
-        const paidBit = p.paidItems.length ? ` · paid ${p.paidItems.map((d) => forWhat(d.it)).join(", ")}` : "";
-        L.push(`${i + 1}. ${p.name} – ${inr(p.due)} (${breakdown(p.dueItems)})${paidBit}`);
-      });
-    }
-    if (clear.length) L.push("", `✅ *All paid:* ${clear.map((p) => p.name).join(", ")}`);
-    const due = owing.reduce((s, p) => s + p.due, 0);
-    L.push("");
-    if (due) {
-      if (dues.length && matches.length) { L.push(`📒 Old dues: ${inr(duesLeft)}`); L.push(`🏟️ Match fees: ${inr(due - duesLeft)}`); }
-      L.push(`💰 *Total pending: ${inr(due)}* from ${owing.length} player${owing.length === 1 ? "" : "s"}`);
-    } else L.push("All paid. Thank you! 🙌");
-    if (S.payNote && S.payNote.trim()) L.push(`Pay to: ${S.payNote.trim()}`);
+    L.push("*Pay and tick ✅ next to your name* 👇");
+    ps.forEach((p, i) => {
+      const nm = `${i + 1}. ${p.name}`;
+      if (!p.due) { L.push(`${nm} – ${inr(p.paid)} ✅`); return; }
+      const paidBit = p.paidItems.length ? ` · paid ${p.paidItems.map((d) => forWhat(d.it)).join(", ")}` : "";
+      L.push(`${nm} – ${inr(p.due)} (${breakdown(p.dueItems)})${paidBit}`);
+    });
+    if (!ps.some((p) => p.due)) L.push("", "All paid. Thank you! 🙌");
     return L.join("\n");
   }
 
@@ -221,12 +215,13 @@
   function reminderText(list, labels) {
     const ps = playersAcross(list).filter((p) => p.due);
     setShortLabels(live());
-    const L = [`⏰ *Reminder · ${S.team || "Team"} match fees*`, ""];
+    const L = [`⏰ *Reminder · ${S.team || "Team"} match fees*`];
+    if (S.payNote && S.payNote.trim()) L.push(`💳 *Pay to: ${S.payNote.trim()}*`);
+    L.push("");
     L.push(...list.map((it) => it.kind === "dues" ? `📒 Old dues` : `🏟️ *${forWhat(it)}* vs ${it.opponent || "TBC"}`), "");
     L.push("Still pending 👇");
     ps.forEach((p, i) => L.push(`${i + 1}. ${p.name} – ${inr(p.due)} (${breakdown(p.dueItems)})`));
     L.push("", "Please pay today and tick ✅ on the fees message. Thank you! 🙏");
-    if (S.payNote && S.payNote.trim()) L.push(`Pay to: ${S.payNote.trim()}`);
     return L.join("\n");
   }
   function thanksText(it, labels) {
